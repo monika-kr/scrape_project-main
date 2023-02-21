@@ -1,35 +1,121 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-
-st.title('Eye Spy Project')
-
-
-import io 
+import io
 import json
-from torchvision import models 
-import torchvision.transforms as transforms 
-from PIL import Image 
-from flask import Flask, jsonify, request 
+import pandas as pd
+import re
+import requests, json, lxml
 
-app = Flask(__name__) 
-imagenet_class_index = json.load(open('imagenet_class_index.json')) 
-model = models.densenet121(pretrained=True) 
-model.eval() 
+import torch
+import numpy as np
+from torchvision import datasets, transforms
+from torch.autograd import Variable
 
-def transform_image(image_bytes):
-    my_transforms = transforms.Compose([transforms.Resize(255),
-                                        transforms.CenterCrop(224), transforms.ToTensor(), 
-                                        transforms.Normalize(
-                                            [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
-    image = Image.open(io.BytesIO(image_bytes)) return my_transforms(image).unsqueeze(0) def 
-get_prediction(image_bytes):
-    tensor = transform_image(image_bytes=image_bytes) outputs = model.forward(tensor) _, y_hat = 
-    outputs.max(1) predicted_idx = str(y_hat.item()) return imagenet_class_index[predicted_idx]
-@app.route('/predict', methods=['POST']) def predict():
-    if request.method == 'POST':
-        file = request.files['file'] img_bytes = file.read() class_id, class_name = 
-        get_prediction(image_bytes=img_bytes) return jsonify({'class_id': class_id, 'class_name': 
-        class_name})
+from torchvision import models
+import torchvision.transforms as transforms
+from PIL import Image
+from flask import Flask, jsonify, request
+
+from bs4 import BeautifulSoup
+import requests
+import urllib
+from PIL import Image
+import requests
+from io import BytesIO
+
+from flask import render_template, session, redirect
+from flask import Flask
+
+app = Flask(__name__, template_folder='template')
+
+@app.route('/', methods=("POST", "GET"))
+def html_table():
+#@app.route('/')
+#def success():
+
+    item_name = []
+    prices = []
+    links = []
+    location = []
+    prediction = []
+
+    for i in range(1,2):
+
+        ebayUrl = "https://www.ebay.co.uk/sch/i.html?_nkw=wooden+pallets&_sop=12&_pgn="+str(i)
+        html_page = requests.get(ebayUrl)
+        soup = BeautifulSoup(html_page.content, "html.parser")
+        container = soup.find('div', class_="srp-river srp-layout-inner")
+
+        listings = soup.find_all('li', attrs={'class': 's-item'})
+
+        for j in range(1,len(listings)):
+            images = container.find_all('img')
+            example = images[j]
+            a = example.attrs['src']
+            response = requests.get(a)
+            img = Image.open(BytesIO(response.content))
+          #  prod_pred = predict_image(img)
+          #  prediction.append(prod_pred)
+        # print(prod_pred)
+
+        for listing in listings:
+            prod_price = " "
+            prod_link = " "
+            prod_pred = " "
+
+            for price in listing.find_all('span', attrs={'class':"s-item__price"}):
+                    prod_price = str(price.find(text=True, recursive=False))
+                #    prod_price = int(re.sub(",","",prod_price.split("INR")[1].split(".")[0]))
+                    prices.append(prod_price)
+                    
+            for link in listing.find_all('a', attrs={'class':"s-item__link"}, href=True):
+                    prod_link = link['href']
+                    prod_link_clean = prod_link.split("?")[0]
+                    links.append(prod_link_clean)
+
+            for title in soup.select(".s-item__title span"):
+                if "Shop on eBay" in title:
+                    pass
+                else:
+                    item_name.append(title.text)
+                
+    ebay_model = torch.load('ebay_model.pth')
+
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    test_transforms = transforms.Compose([transforms.Resize(224),
+                                      transforms.ToTensor(),
+                                     ])
+
+  #  soup = BeautifulSoup(html_page.content, "html.parser")
+   # container = soup.find('div', class_="srp-river srp-layout-inner")
+   # images = container.find_all('img')
+   # prediction = []
+
+    def predict_image(image):
+        image_tensor = test_transforms(image).float()
+        image_tensor = image_tensor.unsqueeze_(0)
+        input = Variable(image_tensor)
+        input = input.to(device)
+        output = ebay_model(input)
+        index = output.data.cpu().numpy().argmax()
+        return index
+
+  #  for j in range(1,len(images)):
+   #     prod_pred = " "
+    #    images = container.find_all('img')   
+     #   example = images[j]
+      #  a = example.attrs['src']
+       # response = requests.get(a)
+ #       img = Image.open(BytesIO(response.content))
+  #      prod_pred = predict_image(img)
+   #     prediction.append(prod_pred)
+        #print(prod_pred)                        
+
+    #df = pd.DataFrame({"Listing title": item_name[1:len(prices)], "Prices": prices[1:], "url": links[1:], "Prediction": prediction})
+    df = pd.DataFrame({"Listing title": item_name[1:len(prices)], "Prices": prices[1:], "url": links[1:]})
+    df = df.iloc[1: , :]
+
+    return render_template('simple.html',  tables=[df.to_html(classes='data')], titles=df.columns.values, formatters={'Link':lambda x:f'<a href="{x}">{x}</a>'})
+
+ 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
