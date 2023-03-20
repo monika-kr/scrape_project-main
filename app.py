@@ -99,19 +99,19 @@ def html_table():
         index = output.data.cpu().numpy().argmax()
         return index
 
-  #  for j in range(1,len(images)):
-   #     prod_pred = " "
-    #    images = container.find_all('img')   
-     #   example = images[j]
-      #  a = example.attrs['src']
-       # response = requests.get(a)
- #       img = Image.open(BytesIO(response.content))
-  #      prod_pred = predict_image(img)
-   #     prediction.append(prod_pred)
+    for j in range(1,len(images)):
+        prod_pred = " "
+        images = container.find_all('img')   
+        example = images[j]
+        a = example.attrs['src']
+        response = requests.get(a)
+        img = Image.open(BytesIO(response.content))
+        prod_pred = predict_image(img)
+        prediction.append(prod_pred)
         #print(prod_pred)                        
 
-    #df = pd.DataFrame({"Listing title": item_name[1:len(prices)], "Prices": prices[1:], "url": links[1:], "Prediction": prediction})
-    df = pd.DataFrame({"Listing title": item_name[1:len(prices)], "Prices": prices[1:], "url": links[1:]})
+    df = pd.DataFrame({"Listing title": item_name[1:len(prices)], "Prices": prices[1:], "url": links[1:], "Prediction": prediction})
+    #df = pd.DataFrame({"Listing title": item_name[1:len(prices)], "Prices": prices[1:], "url": links[1:]})
     df = df.iloc[1: , :]
 
     return render_template('simple.html',  tables=[df.to_html(classes='data')], titles=df.columns.values, formatters={'Link':lambda x:f'<a href="{x}">{x}</a>'})
